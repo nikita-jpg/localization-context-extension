@@ -2,6 +2,9 @@ import '../css/popup.css';
 import { saveAs } from 'file-saver';
 import * as JSZip from 'jszip';
 import storage from './storage';
+import { base64toBlob } from './utils/base64ToBlob';
+import { uploadToJing } from './utils/uploadToJing';
+
 
 const downloadButton = document.getElementById('download');
 const clearButton = document.getElementById('clear');
@@ -19,25 +22,27 @@ async function init() {
 
 // Handler for download all pictures
 downloadButton.onclick = async function () {
-    const screenshots = await storage.getList({withDataUrl: true});
+    const screenshots = await storage.getList({ withDataUrl: true });
 
     const zip = new JSZip();
 
     Object.keys(screenshots).forEach(key => {
         const value = screenshots[key];
-        zip.file(`${key}.jpeg`, value.replace('data:image/jpeg;base64,', ''), {base64: true});
+        zip.file(`${key}.jpeg`, value.replace('data:image/jpeg;base64,', ''), { base64: true });
     });
 
-    const content = await zip.generateAsync({type: "blob"});
+    const content = await zip.generateAsync({ type: "blob" });
 
     saveAs(content, "images.zip");
 };
 
 clearButton.onclick = async function () {
+
     await storage.clear();
 };
 
 showButton.onclick = async () => {
+
     const screenshots = await storage.getList();
 
     imagesContainer.innerHTML = '';
@@ -51,9 +56,35 @@ showButton.onclick = async () => {
         const deleteButton = document.createElement('button');
         deleteButton.innerHTML = 'delete';
 
+        const uploadToJingButton = document.createElement('button');
+        uploadToJingButton.innerHTML = 'uploadToJing';
+
         imageItem.appendChild(valueElement);
         imageItem.appendChild(deleteButton);
+        imageItem.appendChild(uploadToJingButton);
         imagesContainer.appendChild(imageItem);
+
+
+        uploadToJingButton.onclick = async () => {
+            const res = await uploadToJing(`${key}.jpeg`, base64toBlob(screenshots[key].replace(/^data:image\/(jpeg);base64,/, ""), 'image/jpeg'))
+
+            try {
+                const data = await res.json()
+
+                if (data && data.item && data.item.url) {
+                    const clipboardData = `"${key}":"${data.item.url}"`
+
+                    navigator.clipboard.writeText(clipboardData)
+                        .catch(err => {
+                            console.error('Something went wrong', err);
+                        });
+                } else {
+                    console.error("invalid return from jing. data: ", data)
+                }
+            } catch (err) {
+                console.error("err ", err)
+            }
+        }
 
         deleteButton.onclick = async () => {
             const previewLabel = previewContainer.getElementsByTagName('div');
@@ -88,7 +119,7 @@ showButton.onclick = async () => {
     });
 };
 
-async function updateInfo () {
+async function updateInfo() {
     const screenshots = await storage.getList();
     const amount = Object.keys(screenshots).length;
 
